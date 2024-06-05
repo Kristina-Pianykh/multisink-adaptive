@@ -1,177 +1,10 @@
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.*;
-import org.json.JSONArray;
+import java.util.stream.Collectors;
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.json.JSONObject;
 
 public class Playground {
-
-  public static class InputRules {
-    String inputEvent;
-    boolean forwarded;
-
-    public InputRules(String inputEvent, boolean forwarded) {
-      this.inputEvent = inputEvent;
-      this.forwarded = forwarded;
-    }
-  }
-
-  public static class InputRulesForwarded extends InputRules {
-    Integer inputOrigin;
-    HashMap<Integer, ArrayList<Integer>> forwardingRules;
-
-    public InputRulesForwarded(
-        String inputEvent,
-        Integer inputOrigin,
-        boolean forwarded,
-        HashMap<Integer, ArrayList<Integer>> forwardingRules) {
-      super(inputEvent, forwarded);
-      this.inputOrigin = inputOrigin;
-      this.forwardingRules = forwardingRules;
-    }
-  }
-
-  public static class InputRulesNotForwarded extends InputRules {
-
-    public InputRulesNotForwarded(String inputEvent, boolean forwarded) {
-      super(inputEvent, forwarded);
-    }
-  }
-
-  public static class InevNode {
-    String query;
-    Integer node;
-    boolean isPartInput;
-
-    public InevNode(String query, Integer node, boolean isPartInput) {
-      this.query = query;
-      this.node = node;
-    }
-
-    public String toString() {
-      return "(" + query + ", " + node + ")";
-    }
-  }
-
-  public static class InevEdge {
-    InevNode src;
-    InevNode dst;
-
-    public InevEdge(InevNode src, InevNode dst) {
-      this.src = src;
-      this.dst = dst;
-    }
-
-    public String toString() {
-      return src.toString() + " -> " + dst.toString();
-    }
-  }
-
-  public static class JsonParser {
-
-    public JSONObject parseJsonFile(String path) throws IOException {
-      try {
-        String jsonString = new String(Files.readAllBytes(Paths.get(path)));
-        return new JSONObject(jsonString);
-      } catch (IOException e) {
-        System.err.println("Error reading JSON file: " + e.getMessage());
-        throw e;
-      }
-    }
-
-    public HashMap<Integer, ArrayList<String>> parseEvaluationPlan(JSONObject jsonObject) {
-      /* {0: ['SEQ(A, F)'], 1: [], 2: [], 3: [], 4: ['SEQ(A, F)', 'SEQ(A, B, F)']} */
-      HashMap<Integer, ArrayList<String>> evaluationPlan = new HashMap<>();
-      for (String node : jsonObject.keySet()) {
-        evaluationPlan.put(Integer.parseInt(node), new ArrayList<>());
-        JSONArray events = jsonObject.getJSONArray(node);
-        System.out.println(Integer.parseInt(node));
-        if (events.length() == 0) {
-          continue;
-        }
-        for (int i = 0; i < events.length(); i++) {
-          evaluationPlan.get(Integer.parseInt(node)).add(events.getString(i));
-          System.out.println(Integer.parseInt(node) + " : " + events.getString(i));
-        }
-      }
-      return evaluationPlan;
-    }
-
-    public ArrayList<InputRules> parseForwardingRules(JSONObject jsonObject) {
-      /* {'F': {'F1': {1: [2], 2: [0], 0: [4]}, 'F3': {3: [4], 4: [0]}}, 'A': {'A': {}}, SEQ(A, F): {'A0F': {0: [4]}}, 'B': {'B': {}}} */
-      ArrayList<InputRules> forwardingRules = new ArrayList<>();
-      for (String input : jsonObject.keySet()) {
-        System.out.println("input event: " + input);
-        JSONObject inputRules = jsonObject.getJSONObject(input);
-        for (String inputNode : inputRules.keySet()) {
-          System.out.println("input node: " + inputNode);
-          try {
-            Integer srcNode = Integer.parseInt(inputNode.replaceAll("[^0-9]", ""));
-            JSONObject hops = inputRules.getJSONObject(inputNode);
-            HashMap<Integer, ArrayList<Integer>> srcDstMap = new HashMap<>();
-            for (String src : hops.keySet()) {
-              Integer srcHop = Integer.parseInt(src);
-              System.out.println("src hop: " + srcHop);
-              JSONArray dtsHopsJson = hops.getJSONArray(src);
-              ArrayList<Integer> dstsHops = new ArrayList<>();
-              System.out.println("dst hops: ");
-              for (int i = 0; i < dtsHopsJson.length(); i++) {
-                dstsHops.add(dtsHopsJson.getInt(i));
-                System.out.println(dtsHopsJson.getInt(i));
-              }
-              srcDstMap.put(srcHop, dstsHops);
-              InputRulesForwarded inputRulesForwarded =
-                  new InputRulesForwarded(input, srcNode, true, srcDstMap);
-              forwardingRules.add(inputRulesForwarded);
-            }
-          } catch (NumberFormatException e) {
-            System.out.println("input not forwarded");
-            InputRulesNotForwarded inputRulesNotForwarded =
-                new InputRulesNotForwarded(input, false);
-            forwardingRules.add(inputRulesNotForwarded);
-          }
-        }
-      }
-      return forwardingRules;
-    }
-
-    public HashMap<String, ArrayList<String>> parseProjectionInputs(JSONObject jsonObject) {
-
-      /* {'SEQ(A, F)': ['F', 'A'], 'SEQ(A, B, F)': ['SEQ(A, F)', 'B']} */
-      HashMap<String, ArrayList<String>> projectionInputs = new HashMap<>();
-      for (String projection : jsonObject.keySet()) {
-        System.out.println("projection: " + projection);
-        JSONArray inputsJson = jsonObject.getJSONArray(projection);
-        ArrayList<String> inputs = new ArrayList<>();
-        System.out.println("inputs: ");
-        for (int i = 0; i < inputsJson.length(); i++) {
-          inputs.add(inputsJson.getString(i));
-          System.out.println(inputsJson.getString(i));
-        }
-        projectionInputs.put(projection, inputs);
-      }
-      return projectionInputs;
-    }
-
-    public HashMap<Integer, ArrayList<String>> parseEventAssignments(JSONObject jsonObject) {
-
-      /* {0: ['A', 'C', 'D', 'E'], 1: ['F'], 2: ['D', 'E'], 3: ['D', 'E', 'F'], 4: ['A', 'B']} */
-      HashMap<Integer, ArrayList<String>> eventAssignments = new HashMap<>();
-      for (String nodeStr : jsonObject.keySet()) {
-        System.out.println("node: " + nodeStr);
-        JSONArray eventTypesJson = jsonObject.getJSONArray(nodeStr);
-        ArrayList<String> eventTypes = new ArrayList<>();
-        System.out.println("event types: ");
-        for (int i = 0; i < eventTypesJson.length(); i++) {
-          eventTypes.add(eventTypesJson.getString(i));
-          System.out.println(eventTypesJson.getString(i));
-        }
-        eventAssignments.put(Integer.parseInt(nodeStr), eventTypes);
-      }
-      return eventAssignments;
-    }
-  }
 
   public static String getHighLevelQuery(HashMap<String, ArrayList<String>> projInputs) {
     int maxProjLength = 0;
@@ -197,7 +30,9 @@ public class Playground {
       ArrayList<String> queries = evalPlan.get(node);
       if (queries.size() != 0) {
         for (String query : queries) {
-          inevNode = new InevNode(query, node, query.equals(partInput));
+
+          ArrayList<String> inputs = projInputs.get(query);
+          inevNode = new InevNode(query, node, inputs, query.equals(partInput), false);
           inevNodes.add(inevNode);
           System.out.println("added INEv Node: " + inevNode.query + ", " + inevNode.node);
         }
@@ -211,7 +46,7 @@ public class Playground {
         for (Integer node : eventAssignments.keySet()) {
           ArrayList<String> eventTypes = eventAssignments.get(node);
           if (eventTypes.contains(input)) {
-            inevNode = new InevNode(input, node, input.equals(partInput));
+            inevNode = new InevNode(input, node, new ArrayList<>(), input.equals(partInput), true);
             inevNodes.add(inevNode);
             System.out.println("added INEv Node: " + inevNode.query + ", " + inevNode.node);
           }
@@ -246,14 +81,15 @@ public class Playground {
   public static String getPartInput(
       String multiSinkQuery,
       HashMap<String, ArrayList<String>> projInputs,
-      ArrayList<InputRules> forwardingRules) {
+      Set<InputRules> forwardingRules) {
 
     String partInput = null;
     ArrayList<String> inputs = projInputs.get(multiSinkQuery);
     for (String input : inputs) {
       for (InputRules rules : forwardingRules) {
-        if (rules.inputEvent.equals(input) && !rules.forwarded) {}
-        partInput = input;
+        if (rules.inputEvent.equals(input) && !rules.forwarded) {
+          partInput = input;
+        }
       }
     }
     return partInput;
@@ -290,26 +126,49 @@ public class Playground {
     return edges;
   }
 
+  // public static Integer getFallbackNode(ArrayList<InevNode> inevNodes) {}
+
   public static void main(String[] args) {
-    String basePath = "/Users/krispian/Uni/bachelorarbeit/generate_flink_inputs/plans/";
+    // String basePath = "/Users/krispian/Uni/bachelorarbeit/generate_flink_inputs/plans/";
+    String basePath =
+        "/Users/krispian/Uni/bachelorarbeit/test_flink_inputs/generate_flink_inputs/plans/";
     String evalPlanPath = basePath + "evaluation_plan.json";
-    System.out.println(evalPlanPath);
     String forwardingRulesPath = basePath + "forwarding_rules.json";
-    System.out.println(forwardingRulesPath);
     String projInputsPath = basePath + "projection_inputs.json";
     String eventAssignmentsPath = basePath + "event_assignment.json";
+    String networkEdgesPath = basePath + "network_edges.json";
+
     JsonParser parser = new JsonParser();
     try {
       JSONObject jsonObject = parser.parseJsonFile(evalPlanPath);
       HashMap<Integer, ArrayList<String>> evalPlan = parser.parseEvaluationPlan(jsonObject);
       JSONObject jsonObject1 = parser.parseJsonFile(forwardingRulesPath);
-      ArrayList<InputRules> forwardingRules = parser.parseForwardingRules(jsonObject1);
+      Set<InputRules> forwardingRules = parser.parseForwardingRules(jsonObject1);
+      System.out.println("beginning: size of (forwardingRules): " + forwardingRules.size());
+      for (InputRules rule : forwardingRules) {
+        System.out.println(rule.toString());
+      }
+
       JSONObject jsonObject2 = parser.parseJsonFile(projInputsPath);
       HashMap<String, ArrayList<String>> projInputs = parser.parseProjectionInputs(jsonObject2);
       JSONObject jsonObject3 = parser.parseJsonFile(eventAssignmentsPath);
       HashMap<Integer, ArrayList<String>> eventAssignments =
           parser.parseEventAssignments(jsonObject3);
 
+      // union on all atomic events generated and query placements
+      HashMap<Integer, ArrayList<String>> allPlacements = new HashMap<>();
+      for (Integer node : evalPlan.keySet()) {
+        ArrayList<String> placements = new ArrayList<>();
+        placements.addAll(evalPlan.get(node));
+        placements.addAll(eventAssignments.get(node));
+        allPlacements.put(node, placements);
+      }
+
+      // parse network edges
+      JSONObject jsonObjectEdges = parser.parseJsonFile(networkEdgesPath);
+      ArrayList<Tuple2<Integer, Integer>> networkEdges = parser.parseNetworkEdges(jsonObjectEdges);
+
+      // create INEv nodes and edges
       String multiSinkQuery = getMiltiSinkQuery(evalPlan);
       String partInput = getPartInput(multiSinkQuery, projInputs, forwardingRules);
       System.out.println("multiSinkQuery: " + multiSinkQuery);
@@ -317,6 +176,85 @@ public class Playground {
       ArrayList<InevNode> inevNodes =
           getInevNodes(evalPlan, eventAssignments, projInputs, partInput);
       ArrayList<InevEdge> inevEdges = getInevEdges(inevNodes, partInput, projInputs);
+
+      // create list of actual nodes
+      // ArrayList<Node> nodes = new ArrayList<>();
+      HashMap<Integer, Node> nodes = new HashMap<>();
+      for (Integer nodeID : evalPlan.keySet()) {
+        String nodeConfigPath = basePath + "config_" + nodeID + ".json";
+        System.out.println("node config path: " + nodeConfigPath);
+        JSONObject jsonObject4 = parser.parseJsonFile(nodeConfigPath);
+        ArrayList<NodeForwardingRules> rules = parser.parseNodeRules(jsonObject4);
+
+        HashMap<String, ArrayList<String>> projInputMap = new HashMap<>();
+        if (evalPlan.get(nodeID).size() > 0) {
+          for (String query : evalPlan.get(nodeID)) {
+            if (projInputs.containsKey(query)) {
+              projInputMap.put(query, projInputs.get(query));
+            }
+          }
+        }
+        Node nodeObj = new Node(nodeID, eventAssignments.get(nodeID), rules, projInputMap);
+        nodes.put(nodeID, nodeObj);
+        System.out.println(nodeObj.toString());
+      }
+
+      // generate a set of linked lists, each specifying origin of input -> ... -> target
+      System.out.println("number of forwarding rules from forwardingDict" + forwardingRules.size());
+      for (InputRules rulesPerInput : forwardingRules) {
+        System.out.println("forwarded rule being processed now: " + rulesPerInput.toString());
+        if (rulesPerInput.forwarded) {
+          InputRulesForwarded rules = (InputRulesForwarded) rulesPerInput;
+          System.out.println("Linked Lists Paths: Origin -> ... -> Target");
+          System.out.println("Input: " + rules.inputEvent);
+          Set<LinkedList<Node>> lnkdLists = rules.getAllPathsPerInput(nodes);
+          System.out.println("Size of the set of lists: " + lnkdLists.size());
+
+          for (LinkedList<Node> lst : lnkdLists) {
+            System.out.println(lst.stream().map(item -> item.nodeID).collect(Collectors.toList()));
+          }
+          System.out.println("\n\n");
+        }
+      }
+
+      // Graph<Node, ArrayList<Tuple2<Integer, Integer>>> network =
+      //     GraphBuilder.buildGraph(nodes, networkEdges);
+      // System.out.println(network.toString());
+
+      // determine the fallback node
+      Node fallbackNode = null;
+      for (Node node : nodes.values()) {
+
+        if (!node.projProcessed.isEmpty()) {
+          System.out.println("processing node: " + node.nodeID);
+          boolean isMultiSink = node.projProcessed.containsKey(multiSinkQuery);
+          boolean isInputToLocalQuery =
+              node.projProcessed.values().stream()
+                  .anyMatch(inputs -> inputs.contains(multiSinkQuery));
+          boolean isSinkToLocalQuery =
+              node.projProcessed.getOrDefault(multiSinkQuery, new ArrayList<>()).stream()
+                  .anyMatch(node.projProcessed::containsKey);
+          System.out.println("isMultiSink: " + isMultiSink);
+          System.out.println("processMultiSinkQueryLocally: " + isInputToLocalQuery);
+          System.out.println("sinkToLocalQuery: " + isSinkToLocalQuery);
+          if (isMultiSink && (isInputToLocalQuery || isSinkToLocalQuery)) {
+            fallbackNode = node;
+            break;
+          }
+        }
+      }
+      if (fallbackNode == null) {
+        int maxForwardRuleCount = 0;
+        for (Node node : nodes.values()) {
+          boolean isMultiSink = node.projProcessed.containsKey(multiSinkQuery);
+          if ((node.forwardingRules.size() > maxForwardRuleCount) && isMultiSink) {
+            maxForwardRuleCount = node.forwardingRules.size();
+            fallbackNode = node;
+          }
+        }
+      }
+      assert fallbackNode != null;
+      System.out.println("fallback node: " + fallbackNode.nodeID);
 
     } catch (IOException e) {
       e.printStackTrace();
