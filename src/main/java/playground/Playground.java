@@ -207,10 +207,11 @@ public class Playground {
           InputRulesForwarded rules = (InputRulesForwarded) rulesPerInput;
           System.out.println("Linked Lists Paths: Origin -> ... -> Target");
           System.out.println("Input: " + rules.inputEvent);
-          Set<LinkedList<Node>> lnkdLists = rules.getAllPathsPerInput(nodes);
-          System.out.println("Size of the set of lists: " + lnkdLists.size());
+          Set<LinkedList<Node>> inputOriginTargetSet = rules.getAllPathsPerInput(nodes);
 
-          for (LinkedList<Node> lst : lnkdLists) {
+          for (LinkedList<Node> lst : inputOriginTargetSet) {
+            Node headNode = lst.getFirst();
+            headNode.inputTargetPaths.put(rules.inputEvent, inputOriginTargetSet);
             System.out.println(lst.stream().map(item -> item.nodeID).collect(Collectors.toList()));
           }
           System.out.println("\n\n");
@@ -254,7 +255,44 @@ public class Playground {
         }
       }
       assert fallbackNode != null;
+      nodes.get(fallbackNode.nodeID).fallbackNode = true;
       System.out.println("fallback node: " + fallbackNode.nodeID);
+
+      // adaptive strategy
+      // step 1. Remove processing of multiSinkQuery from all non-fallback nodes
+      for (Node node : nodes.values()) {
+        boolean isMultiSinkNonFallbackNode =
+            (!node.fallbackNode) && node.projProcessed.containsKey(multiSinkQuery);
+        if (isMultiSinkNonFallbackNode) {
+          node.projProcessed.remove(multiSinkQuery); // remove query Q
+          node.inputTargetPaths.remove(multiSinkQuery); // remove forwarding of Q matches
+        }
+      }
+
+      // step 2. Remove the rules that forward inputs of Q to non-fallback nodes
+      ArrayList<Node> nonFallbackNodes = new ArrayList<>();
+      for (Node node : nodes.values()) {
+        if (!node.fallbackNode && node.projProcessed.containsKey(multiSinkQuery)) {
+          nonFallbackNodes.add(node);
+        }
+      }
+
+      ArrayList<String> multiSinkQueryInputs = projInputs.get(multiSinkQuery);
+      for (Node node : nodes.values()) {
+        for (String multiSinkQueryInput : multiSinkQueryInputs) {
+          Set<LinkedList<Node>> inputPaths = node.inputTargetPaths.get(multiSinkQueryInput);
+          if (inputPaths != null) {
+            for (LinkedList<Node> inputPath : inputPaths) {
+              Node targetNode = inputPath.getLast();
+              if (nonFallbackNodes.contains(targetNode)) {
+                node.inputTargetPaths.get(multiSinkQuery).remove(inputPath);
+              }
+            }
+          }
+        }
+      }
+
+      // step 3. Compute shortest path from non-fallback nodes to fallback node
 
     } catch (IOException e) {
       e.printStackTrace();

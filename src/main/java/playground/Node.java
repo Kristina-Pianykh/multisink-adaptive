@@ -1,11 +1,12 @@
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.*;
 
 public class Node {
   Integer nodeID;
   ArrayList<String> eventsGenerated;
   ArrayList<NodeForwardingRules> forwardingRules;
   HashMap<String, ArrayList<String>> projProcessed;
+  HashMap<String, Set<LinkedList<Node>>> inputTargetPaths;
+  boolean fallbackNode;
 
   public Node(
       Integer nodeID,
@@ -16,6 +17,8 @@ public class Node {
     this.eventsGenerated = eventsGenerated;
     this.forwardingRules = forwardingRules;
     this.projProcessed = projProcessed;
+    this.inputTargetPaths = new HashMap<>();
+    this.fallbackNode = false;
   }
 
   public String toString() {
