@@ -43,11 +43,12 @@ public class JsonParser {
 
     for (String input : jsonObject.keySet()) {
       Integer srcNode = null;
+
       System.out.println("input event: " + input);
       JSONObject inputRules = jsonObject.getJSONObject(input);
       for (String inputNode : inputRules.keySet()) {
         System.out.println("input node: " + inputNode);
-        // Integer srcNode = Integer.parseInt(inputNode.replaceAll("[^0-9]", ""));
+
         JSONObject hops = inputRules.getJSONObject(inputNode);
         System.out.println("hops: " + hops.toString());
         if (hops.length() == 0) {
@@ -59,10 +60,16 @@ public class JsonParser {
         int cnt = 0;
         for (String src : hops.keySet()) {
           Integer srcHop = Integer.parseInt(src);
-          if (cnt == 0) {
-            srcNode = srcHop;
-            System.out.println("src node: " + srcNode);
+
+          try {
+            srcNode = Integer.parseInt(inputNode.replaceAll("[^0-9]", ""));
+          } catch (NumberFormatException e) {
+            if (cnt == 0) {
+              srcNode = srcHop;
+            }
           }
+          System.out.println("src node: " + srcNode);
+
           System.out.println("src hop: " + srcHop);
           JSONArray dtsHopsJson = hops.getJSONArray(src);
           ArrayList<Integer> dstsHops = new ArrayList<>();
@@ -71,6 +78,7 @@ public class JsonParser {
             dstsHops.add(dtsHopsJson.getInt(i));
             System.out.println(dtsHopsJson.getInt(i));
           }
+          System.out.println("src hops: " + srcHop + " dst hops: " + dstsHops.toString());
           srcDstMap.put(srcHop, dstsHops);
           cnt++;
         }
@@ -131,9 +139,9 @@ public class JsonParser {
         .collect(Collectors.toList());
   }
 
-  public ArrayList<NodeForwardingRules> parseNodeRules(JSONObject jsonObject) {
+  public Set<NodeForwardingRules> parseNodeRules(JSONObject jsonObject) {
 
-    ArrayList<NodeForwardingRules> nodeRules = new ArrayList<>();
+    Set<NodeForwardingRules> nodeRules = new HashSet<>();
     JSONArray ftJson = jsonObject.getJSONObject("forwarding").getJSONArray("forwarding_table");
     for (int i = 0; i < ftJson.length(); i++) {
       JSONArray ftEntry =
@@ -142,9 +150,19 @@ public class JsonParser {
       String eventType = ftEntry.getString(0);
       ArrayList<Integer> sourceNodes = (ArrayList) jsonArrayToInt(ftEntry.getJSONArray(1));
       ArrayList<Integer> destNodes = (ArrayList) jsonArrayToInt(ftEntry.getJSONArray(2));
+      System.out.println("source nodes: " + sourceNodes);
+      System.out.println("dest nodes: " + destNodes);
+      for (Integer srcNode : sourceNodes) {
+        for (Integer dstNode : destNodes) {
+          System.out.println(
+              "creating a node rule: " + eventType + ", " + srcNode + " -> " + dstNode);
+          nodeRules.add(new NodeForwardingRules(eventType, dstNode));
+        }
+      }
 
-      nodeRules.add(new NodeForwardingRules(eventType, sourceNodes, destNodes));
+      // nodeRules.add(new NodeForwardingRules(eventType, sourceNodes, destNodes));
     }
+    System.out.println("rules created: " + nodeRules.size() + "\n");
     return nodeRules;
   }
 

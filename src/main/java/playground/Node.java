@@ -3,7 +3,7 @@ import java.util.*;
 public class Node {
   Integer nodeID;
   ArrayList<String> eventsGenerated;
-  ArrayList<NodeForwardingRules> forwardingRules;
+  Set<NodeForwardingRules> forwardingRules;
   HashMap<String, ArrayList<String>> projProcessed;
   HashMap<String, Set<LinkedList<Node>>> inputTargetPaths;
   boolean fallbackNode;
@@ -11,7 +11,7 @@ public class Node {
   public Node(
       Integer nodeID,
       ArrayList<String> eventsGenerated,
-      ArrayList<NodeForwardingRules> forwardingRules,
+      Set<NodeForwardingRules> forwardingRules,
       HashMap<String, ArrayList<String>> projProcessed) {
     this.nodeID = nodeID;
     this.eventsGenerated = eventsGenerated;

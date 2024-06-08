@@ -1,6 +1,7 @@
 import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.json.JSONObject;
 
@@ -83,16 +84,22 @@ public class Playground {
       HashMap<String, ArrayList<String>> projInputs,
       Set<InputRules> forwardingRules) {
 
-    String partInput = null;
     ArrayList<String> inputs = projInputs.get(multiSinkQuery);
-    for (String input : inputs) {
-      for (InputRules rules : forwardingRules) {
-        if (rules.inputEvent.equals(input) && !rules.forwarded) {
-          partInput = input;
-        }
-      }
-    }
-    return partInput;
+    List<String> delta = new ArrayList<>();
+    delta.addAll(inputs);
+
+    ArrayList<String> forwardedRules =
+        forwardingRules.stream()
+            .filter(rule -> rule.forwarded)
+            .map(rule -> (InputRulesForwarded) rule)
+            .map(rule -> rule.inputEvent)
+            .collect(Collectors.toCollection(ArrayList::new));
+    System.out.println("forwardedRules: " + forwardedRules);
+    delta.removeAll(forwardedRules);
+    System.out.println("delta: " + delta);
+
+    assert delta.size() == 1;
+    return delta.get(0);
   }
 
   public static ArrayList<InevEdge> getInevEdges(
@@ -126,7 +133,139 @@ public class Playground {
     return edges;
   }
 
-  // public static Integer getFallbackNode(ArrayList<InevNode> inevNodes) {}
+  public static HashMap<InevNode, Set<InevNode>> buildInevGraph(
+      ArrayList<InevNode> inevNodes, ArrayList<InevEdge> inevEdges) {
+    HashMap<InevNode, Set<InevNode>> neighbours = new HashMap<>();
+    for (InevEdge edge : inevEdges) {
+      InevNode src = edge.src;
+      InevNode dst = edge.dst;
+      // neighbours.putIfAbsent(src, new HashSet<>());
+      // neighbours.get(src).add(dst);
+      neighbours.putIfAbsent(dst, new HashSet<>());
+      neighbours.get(dst).add(src);
+    }
+
+    for (InevNode node : neighbours.keySet()) {
+      System.out.println("Node: ");
+      System.out.println("\n  " + node.toString() + "\n");
+      for (InevNode neighbor : neighbours.get(node)) {
+        System.out.println("  " + neighbor.toString());
+      }
+    }
+    return neighbours;
+  }
+
+  public static HashMap<String, Set<LinkedList<Node>>> getCriticalPaths(
+      HashMap<InevNode, Set<InevNode>> inevGraph,
+      Integer fallbackNodeID,
+      String multiSinkQuery,
+      HashMap<Integer, Node> nodes) {
+    HashMap<String, Set<LinkedList<Node>>> criticalPaths = new HashMap<>();
+    Set<InevNode> neighbours = null;
+    for (InevNode inevNode : inevGraph.keySet()) {
+      if (inevNode.node == fallbackNodeID && inevNode.query.equals(multiSinkQuery)) {
+        neighbours = inevGraph.get(inevNode);
+        System.out.println("identified the InevNode for the fallback node: " + inevNode.toString());
+        System.out.println("number of sources: " + neighbours.size());
+        break;
+      }
+    }
+    for (InevNode inputSource : neighbours) {
+      System.out.println("source query: " + inputSource.query);
+      System.out.println("source nodeID: " + inputSource.node);
+      Integer nodeId = inputSource.node;
+      Set<LinkedList<Node>> networkPath = nodes.get(nodeId).inputTargetPaths.get(inputSource.query);
+      if (networkPath == null) {
+        continue;
+      }
+
+      for (LinkedList<Node> path : networkPath) {
+        System.out.println("\n Path: ");
+        LinkedList<Node> truncatedPath = new LinkedList<>();
+        if (!path.contains(nodes.get(fallbackNodeID))) {
+          continue;
+        }
+        for (Node node : path) {
+          truncatedPath.add(node);
+          System.out.println(" -> node: " + node.nodeID);
+          if (node.nodeID == fallbackNodeID) {
+            break;
+          }
+        }
+        criticalPaths.putIfAbsent(inputSource.query, new HashSet<>());
+        criticalPaths.get(inputSource.query).add(truncatedPath);
+        System.out.println("size of critical paths: " + criticalPaths.size());
+      }
+      // System.out.println(nodes.get(nodeId).inputTargetPaths.toString());
+      // System.out.println("networkPath: " + networkPath);
+      // criticalPaths.getOrDefault(inputSource.query, new HashSet<>()).addAll(networkPath);
+    }
+    System.out.println("critical Paths: ");
+    for (String input : criticalPaths.keySet()) {
+      System.out.println("Input: " + input);
+      for (LinkedList<Node> path : criticalPaths.get(input)) {
+        System.out.println(
+            path.stream().map(node -> node.nodeID).collect(Collectors.toList()).toString());
+      }
+    }
+    return criticalPaths;
+  }
+
+  public static HashMap<String, Set<LinkedList<Node>>> getInevPairsToRemove(
+      HashMap<InevNode, Set<InevNode>> inevGraph,
+      Integer fallbackNodeID,
+      String multiSinkQuery,
+      HashMap<Integer, Node> nodes) {
+    HashMap<String, Set<LinkedList<Node>>> criticalPaths = new HashMap<>();
+    Set<InevNode> neighbours = null;
+    for (InevNode inevNode : inevGraph.keySet()) {
+      if (inevNode.node == fallbackNodeID && inevNode.query.equals(multiSinkQuery)) {
+        neighbours = inevGraph.get(inevNode);
+        System.out.println("identified the InevNode for the fallback node: " + inevNode.toString());
+        System.out.println("number of sources: " + neighbours.size());
+        break;
+      }
+    }
+    for (InevNode inputSource : neighbours) {
+      System.out.println("source query: " + inputSource.query);
+      System.out.println("source nodeID: " + inputSource.node);
+      Integer nodeId = inputSource.node;
+      Set<LinkedList<Node>> networkPath = nodes.get(nodeId).inputTargetPaths.get(inputSource.query);
+      if (networkPath == null) {
+        continue;
+      }
+
+      for (LinkedList<Node> path : networkPath) {
+        System.out.println("\n Path: ");
+        LinkedList<Node> truncatedPath = new LinkedList<>();
+        if (!path.contains(nodes.get(fallbackNodeID))) {
+          continue;
+        }
+        for (Node node : path) {
+          truncatedPath.add(node);
+          System.out.println(" -> node: " + node.nodeID);
+          if (node.nodeID == fallbackNodeID) {
+            break;
+          }
+        }
+        criticalPaths.putIfAbsent(inputSource.query, new HashSet<>());
+        criticalPaths.get(inputSource.query).add(truncatedPath);
+        System.out.println("size of critical paths: " + criticalPaths.size());
+      }
+      // System.out.println(nodes.get(nodeId).inputTargetPaths.toString());
+      // System.out.println("networkPath: " + networkPath);
+      // criticalPaths.getOrDefault(inputSource.query, new HashSet<>()).addAll(networkPath);
+    }
+    System.out.println("critical Paths: ");
+    for (String input : criticalPaths.keySet()) {
+      System.out.println("Input: " + input);
+      for (LinkedList<Node> path : criticalPaths.get(input)) {
+        System.out.println(
+            path.stream().map(node -> node.nodeID).collect(Collectors.toList()).toString());
+      }
+    }
+    return criticalPaths;
+  }
 
   public static void main(String[] args) {
     // String basePath = "/Users/krispian/Uni/bachelorarbeit/generate_flink_inputs/plans/";
@@ -176,6 +315,7 @@ public class Playground {
       ArrayList<InevNode> inevNodes =
           getInevNodes(evalPlan, eventAssignments, projInputs, partInput);
       ArrayList<InevEdge> inevEdges = getInevEdges(inevNodes, partInput, projInputs);
+      HashMap<InevNode, Set<InevNode>> inevGraph = buildInevGraph(inevNodes, inevEdges);
 
       // create list of actual nodes
       // ArrayList<Node> nodes = new ArrayList<>();
@@ -184,7 +324,7 @@ public class Playground {
         String nodeConfigPath = basePath + "config_" + nodeID + ".json";
         System.out.println("node config path: " + nodeConfigPath);
         JSONObject jsonObject4 = parser.parseJsonFile(nodeConfigPath);
-        ArrayList<NodeForwardingRules> rules = parser.parseNodeRules(jsonObject4);
+        Set<NodeForwardingRules> rules = parser.parseNodeRules(jsonObject4);
 
         HashMap<String, ArrayList<String>> projInputMap = new HashMap<>();
         if (evalPlan.get(nodeID).size() > 0) {
@@ -218,10 +358,6 @@ public class Playground {
         }
       }
 
-      // Graph<Node, ArrayList<Tuple2<Integer, Integer>>> network =
-      //     GraphBuilder.buildGraph(nodes, networkEdges);
-      // System.out.println(network.toString());
-
       // determine the fallback node
       Node fallbackNode = null;
       for (Node node : nodes.values()) {
@@ -245,9 +381,12 @@ public class Playground {
         }
       }
       if (fallbackNode == null) {
+        System.out.println("no fallback node found. Using node with most forwarding rules.");
         int maxForwardRuleCount = 0;
         for (Node node : nodes.values()) {
           boolean isMultiSink = node.projProcessed.containsKey(multiSinkQuery);
+          System.out.println("processing node: " + node.nodeID);
+          System.out.println("number of forwarding rules: " + node.forwardingRules.size());
           if ((node.forwardingRules.size() > maxForwardRuleCount) && isMultiSink) {
             maxForwardRuleCount = node.forwardingRules.size();
             fallbackNode = node;
@@ -258,41 +397,161 @@ public class Playground {
       nodes.get(fallbackNode.nodeID).fallbackNode = true;
       System.out.println("fallback node: " + fallbackNode.nodeID);
 
+      // determine critical paths for the inputs of Q to the fallback node
+      HashMap<String, Set<LinkedList<Node>>> criticalPaths =
+          getCriticalPaths(inevGraph, fallbackNode.nodeID, multiSinkQuery, nodes);
+      // System.out.println("\nCritical Paths:");
+      // System.out.println("number of critical paths: " + criticalPaths.size());
+      // for (String input : criticalPaths.keySet()) {
+      //   System.out.println("Input: " + input);
+      //   for (LinkedList<Node> path : criticalPaths.get(input)) {
+      //     System.out.println(
+      //         path.stream().map(node -> node.nodeID).collect(Collectors.toList()).toString());
+      //   }
+      // }
+
       // adaptive strategy
       // step 1. Remove processing of multiSinkQuery from all non-fallback nodes
-      for (Node node : nodes.values()) {
-        boolean isMultiSinkNonFallbackNode =
-            (!node.fallbackNode) && node.projProcessed.containsKey(multiSinkQuery);
-        if (isMultiSinkNonFallbackNode) {
-          node.projProcessed.remove(multiSinkQuery); // remove query Q
-          node.inputTargetPaths.remove(multiSinkQuery); // remove forwarding of Q matches
-        }
-      }
-
-      // step 2. Remove the rules that forward inputs of Q to non-fallback nodes
       ArrayList<Node> nonFallbackNodes = new ArrayList<>();
       for (Node node : nodes.values()) {
         if (!node.fallbackNode && node.projProcessed.containsKey(multiSinkQuery)) {
           nonFallbackNodes.add(node);
         }
       }
+      System.out.println(
+          "nonFallbackNodes: " + nonFallbackNodes.stream().map(n -> n.nodeID).toList());
 
+      for (Node node : nodes.values()) {
+        boolean isMultiSinkNonFallbackNode =
+            (!node.fallbackNode) && node.projProcessed.containsKey(multiSinkQuery);
+        if (isMultiSinkNonFallbackNode) {
+          System.out.println("removing query Q and forrwarding of Q from node: " + node.nodeID);
+          node.projProcessed.remove(multiSinkQuery); // remove query Q
+          node.inputTargetPaths.remove(multiSinkQuery); // remove forwarding of Q matches
+          System.out.println("processing queries after removal: " + node.projProcessed.keySet());
+          System.out.println(
+              "forwarding rules after removal now only for the following queries: "
+                  + node.inputTargetPaths.keySet());
+        }
+      }
+      System.out.println("\n\n");
+
+      // step 2. Remove the rules that forward inputs of Q to non-fallback nodes
       ArrayList<String> multiSinkQueryInputs = projInputs.get(multiSinkQuery);
       for (Node node : nodes.values()) {
         for (String multiSinkQueryInput : multiSinkQueryInputs) {
           Set<LinkedList<Node>> inputPaths = node.inputTargetPaths.get(multiSinkQueryInput);
           if (inputPaths != null) {
+            Set<LinkedList<Node>> updatedInputPaths = new HashSet<>();
             for (LinkedList<Node> inputPath : inputPaths) {
               Node targetNode = inputPath.getLast();
-              if (nonFallbackNodes.contains(targetNode)) {
-                node.inputTargetPaths.get(multiSinkQuery).remove(inputPath);
+              if (!nonFallbackNodes.contains(targetNode)) {
+                updatedInputPaths.add(inputPath);
+              } else {
+                System.out.println(
+                    "removing forwarding rule from ORIGIN "
+                        + node.nodeID
+                        + " -> ... -> TARGET "
+                        + targetNode.nodeID
+                        + " for input: "
+                        + multiSinkQueryInput);
+                // traverse the linked list and remove the NodeForwardingRules
+                // from each node on the way for the given input
+                for (int i = 0; i < inputPath.size() - 1; i++) {
+                  Node srcNode = inputPath.get(i);
+                  Node destNode = inputPath.get(i + 1);
+                  NodeForwardingRules srcDstPair =
+                      new NodeForwardingRules(multiSinkQueryInput, destNode.nodeID);
+                  srcNode.forwardingRules.remove(srcDstPair);
+                  System.out.println(
+                      "Removed forwarding rule for node "
+                          + srcNode.nodeID
+                          + " "
+                          + i
+                          + " -> "
+                          + destNode.nodeID);
+                  // one hop before
+                  if (i > 0) {
+                    srcDstPair = new NodeForwardingRules(multiSinkQueryInput, destNode.nodeID);
+                    srcNode.forwardingRules.remove(srcDstPair);
+                    System.out.println(
+                        "Removed forwarding rule for node "
+                            + srcNode.nodeID
+                            + " "
+                            + (i - 1)
+                            + " -> "
+                            + destNode.nodeID);
+                  }
+                }
               }
             }
+            node.inputTargetPaths.put(multiSinkQueryInput, updatedInputPaths);
+            System.out.println("updated node rules: " + node.forwardingRules.toString());
+            System.out.println("\n\n\n");
           }
         }
       }
 
       // step 3. Compute shortest path from non-fallback nodes to fallback node
+      HashMap<Integer, Set<Integer>> nodeNeighbors = Graph.getAllNeighbors(networkEdges);
+      for (Integer node : nodeNeighbors.keySet()) {
+        System.out.println("Node: " + node + " Neighbors: " + nodeNeighbors.get(node).toString());
+      }
+      for (Node node : nonFallbackNodes) {
+        System.out.println("Node: " + node.nodeID);
+        Set<LinkedList<Integer>> allPaths =
+            Graph.findAllPaths(node.nodeID, fallbackNode.nodeID, nodeNeighbors);
+        LinkedList<Integer> shortestPath = Graph.getShortestPath(allPaths);
+        System.out.println(
+            "Shortest Path from "
+                + node.nodeID
+                + " to "
+                + fallbackNode.nodeID
+                + ":"
+                + shortestPath);
+
+        System.out.println("\n\nSHORTEST PATH SELECTED: " + shortestPath.toString() + "\n\n\n");
+        // add the new path for each input to Q generated by a non-fallback node
+        // to forward to the fallback node
+        List<String> relevantQInputs =
+            Stream.concat(node.eventsGenerated.stream(), node.projProcessed.keySet().stream())
+                .filter(input -> multiSinkQueryInputs.contains(input))
+                .collect(Collectors.toList());
+        for (String input : relevantQInputs) {
+          Set<LinkedList<Node>> newPath = new HashSet<>();
+          newPath.add(
+              shortestPath.stream()
+                  .map(nodes::get)
+                  .collect(Collectors.toCollection(LinkedList::new)));
+          node.inputTargetPaths.put(input, newPath);
+        }
+
+        // add forwarding rule fo reach node on the path
+        for (int i = 0; i < shortestPath.size() - 1; i++) {
+          Node srcNode = nodes.get(shortestPath.get(i));
+          Node destNode = nodes.get(shortestPath.get(i + 1));
+          for (String input : relevantQInputs) {
+            srcNode.forwardingRules.add(new NodeForwardingRules(input, destNode.nodeID));
+            System.out.println(
+                "added forwarding rule: "
+                    + srcNode.nodeID
+                    + " -> "
+                    + destNode.nodeID
+                    + " for input: "
+                    + input);
+          }
+        }
+      }
+
+      for (Node node : nodes.values()) {
+        System.out.println("Node: " + node.nodeID);
+        System.out.println("local forwarding rules:");
+        for (NodeForwardingRules rule : node.forwardingRules) {
+          System.out.println(rule.toString());
+        }
+        System.out.println("Processing queries: " + node.projProcessed.keySet());
+        System.out.println("\n\n\n");
+      }
 
     } catch (IOException e) {
       e.printStackTrace();
