@@ -37,6 +37,11 @@ public class JsonParser {
     return evaluationPlan;
   }
 
+  public int parseSteinerTreeSize(JSONObject jsonObject) {
+    /* {'steiner_tree_size': 3} */
+    return jsonObject.getInt("steiner_tree_size");
+  }
+
   public Set<InputRules> parseForwardingRules(JSONObject jsonObject) {
     /* {'F': {'F1': {1: [2], 2: [0], 0: [4]}, 'F3': {3: [4], 4: [0]}}, 'A': {'A': {}}, SEQ(A, F): {'A0F': {0: [4]}}, 'B': {'B': {}}} */
     Set<InputRules> forwardingRules = new HashSet<>();

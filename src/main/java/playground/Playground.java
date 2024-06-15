@@ -327,6 +327,7 @@ public class Playground {
     String projInputsPath = basePath + "projection_inputs.json";
     String eventAssignmentsPath = basePath + "event_assignment.json";
     String networkEdgesPath = basePath + "network_edges.json";
+    String steinerTreeSizePath = basePath + "steiner_tree_size.json";
 
     JsonParser parser = new JsonParser();
     try {
@@ -609,6 +610,26 @@ public class Playground {
         System.out.println("Processing queries: " + node.projProcessed.keySet());
         System.out.println("\n\n\n");
       }
+
+      // save the info required for the calculation of the inequality
+      // to monitor for rates to change
+      InequalityInputs inequalityInputs = new InequalityInputs();
+      inequalityInputs.multiSinkQuery = multiSinkQuery;
+      inequalityInputs.numMultiSinkNodes = nonFallbackNodes.size() + 1;
+      inequalityInputs.multiSinkNodes =
+          nonFallbackNodes.stream()
+              .map(n -> n.nodeID)
+              .collect(Collectors.toCollection(ArrayList::new));
+      inequalityInputs.multiSinkNodes.add(fallbackNode.nodeID);
+      inequalityInputs.partitioningInput = partInput;
+      inequalityInputs.queryInputs = multiSinkQueryInputs;
+      inequalityInputs.nonPartitioningInputs =
+          multiSinkQueryInputs.stream()
+              .filter(input -> !input.equals(partInput))
+              .collect(Collectors.toCollection(ArrayList::new));
+      JSONObject jsonObjectSt = parser.parseJsonFile(steinerTreeSizePath);
+      inequalityInputs.steinerTreeSize = parser.parseSteinerTreeSize(jsonObjectSt);
+      inequalityInputs.saveToFile(basePath + "inequality_inputs.json");
 
     } catch (IOException e) {
       e.printStackTrace();
