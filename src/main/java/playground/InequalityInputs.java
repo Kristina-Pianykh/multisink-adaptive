@@ -11,6 +11,7 @@ public class InequalityInputs {
   public ArrayList<String> queryInputs;
   public ArrayList<String> nonPartitioningInputs;
   public int steinerTreeSize;
+  public HashMap<String, Integer> numNodesPerQueryInput;
 
   public void saveToFile(String filePath) throws IOException {
     // Save the object to a file

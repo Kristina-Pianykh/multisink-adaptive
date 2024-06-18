@@ -321,7 +321,7 @@ public class Playground {
   public static void main(String[] args) {
     // String basePath = "/Users/krispian/Uni/bachelorarbeit/generate_flink_inputs/plans/";
     String basePath =
-        "/Users/krispian/Uni/bachelorarbeit/test_flink_inputs/generate_flink_inputs/plans/";
+        "/Users/krispian/Uni/bachelorarbeit/test_flink_inputs_dev/generate_flink_inputs/plans/";
     String evalPlanPath = basePath + "evaluation_plan.json";
     String forwardingRulesPath = basePath + "forwarding_rules.json";
     String projInputsPath = basePath + "projection_inputs.json";
@@ -413,20 +413,20 @@ public class Playground {
       // determine the fallback node
       Node fallbackNode = null;
       for (Node node : nodes.values()) {
+        System.out.println("processing node: " + node.nodeID);
+        System.out.println("processing queries: " + node.projProcessed.keySet());
 
-        if (!node.projProcessed.isEmpty()) {
+        if (node.projProcessed.containsKey(multiSinkQuery)) {
           System.out.println("processing node: " + node.nodeID);
-          boolean isMultiSink = node.projProcessed.containsKey(multiSinkQuery);
           boolean isInputToLocalQuery =
               node.projProcessed.values().stream()
                   .anyMatch(inputs -> inputs.contains(multiSinkQuery));
           boolean isSinkToLocalQuery =
-              node.projProcessed.getOrDefault(multiSinkQuery, new ArrayList<>()).stream()
+              node.projProcessed.get(multiSinkQuery).stream()
                   .anyMatch(node.projProcessed::containsKey);
-          System.out.println("isMultiSink: " + isMultiSink);
-          System.out.println("processMultiSinkQueryLocally: " + isInputToLocalQuery);
-          System.out.println("sinkToLocalQuery: " + isSinkToLocalQuery);
-          if (isMultiSink && (isInputToLocalQuery || isSinkToLocalQuery)) {
+          System.out.println("isInputToLocalQuery: " + isInputToLocalQuery);
+          System.out.println("isSinkToLocalQuery: " + isSinkToLocalQuery);
+          if (isInputToLocalQuery || isSinkToLocalQuery) {
             fallbackNode = node;
             break;
           }
@@ -495,60 +495,6 @@ public class Playground {
 
       System.out.println("REMOVING NEW ALGORUTHM");
       nodeRulesToRemove(criticalPaths, invalidPaths, nodes, multiSinkQuery);
-
-      // for (Node node : nodes.values()) {
-      //   for (String multiSinkQueryInput : multiSinkQueryInputs) {
-      //     Set<LinkedList<Node>> inputPaths = node.inputTargetPaths.get(multiSinkQueryInput);
-      //     if (inputPaths != null) {
-      //       Set<LinkedList<Node>> updatedInputPaths = new HashSet<>();
-      //       for (LinkedList<Node> inputPath : inputPaths) {
-      //         Node targetNode = inputPath.getLast();
-      //         if (!nonFallbackNodes.contains(targetNode)) {
-      //           updatedInputPaths.add(inputPath);
-      //         } else {
-      //           System.out.println(
-      //               "removing forwarding rule from ORIGIN "
-      //                   + node.nodeID
-      //                   + " -> ... -> TARGET "
-      //                   + targetNode.nodeID
-      //                   + " for input: "
-      //                   + multiSinkQueryInput);
-      //           // traverse the linked list and remove the NodeForwardingRules
-      //           // from each node on the way for the given input
-      //           for (int i = 0; i < inputPath.size() - 1; i++) {
-      //             Node srcNode = inputPath.get(i);
-      //             Node destNode = inputPath.get(i + 1);
-      //             NodeForwardingRules srcDstPair =
-      //                 new NodeForwardingRules(multiSinkQueryInput, destNode.nodeID);
-      //             srcNode.forwardingRules.remove(srcDstPair);
-      //             System.out.println(
-      //                 "Removed forwarding rule for node "
-      //                     + srcNode.nodeID
-      //                     + " "
-      //                     + i
-      //                     + " -> "
-      //                     + destNode.nodeID);
-      //             // one hop before
-      //             if (i > 0) {
-      //               srcDstPair = new NodeForwardingRules(multiSinkQueryInput, destNode.nodeID);
-      //               srcNode.forwardingRules.remove(srcDstPair);
-      //               System.out.println(
-      //                   "Removed forwarding rule for node "
-      //                       + srcNode.nodeID
-      //                       + " "
-      //                       + (i - 1)
-      //                       + " -> "
-      //                       + destNode.nodeID);
-      //             }
-      //           }
-      //         }
-      //       }
-      //       node.inputTargetPaths.put(multiSinkQueryInput, updatedInputPaths);
-      //       System.out.println("updated node rules: " + node.forwardingRules.toString());
-      //       System.out.println("\n\n\n");
-      //     }
-      //   }
-      // }
 
       // step 3. Compute shortest path from non-fallback nodes to fallback node
       HashMap<Integer, Set<Integer>> nodeNeighbors = Graph.getAllNeighbors(networkEdges);
@@ -629,6 +575,16 @@ public class Playground {
               .collect(Collectors.toCollection(ArrayList::new));
       JSONObject jsonObjectSt = parser.parseJsonFile(steinerTreeSizePath);
       inequalityInputs.steinerTreeSize = parser.parseSteinerTreeSize(jsonObjectSt);
+      inequalityInputs.numNodesPerQueryInput = new HashMap<>();
+      for (String input : multiSinkQueryInputs) {
+        for (Node node : nodes.values()) {
+          if (node.eventsGenerated.contains(input) || node.projProcessed.keySet().contains(input)) {
+            inequalityInputs.numNodesPerQueryInput.putIfAbsent(input, 0);
+            inequalityInputs.numNodesPerQueryInput.put(
+                input, inequalityInputs.numNodesPerQueryInput.get(input) + 1);
+          }
+        }
+      }
       inequalityInputs.saveToFile(basePath + "inequality_inputs.json");
 
     } catch (IOException e) {
