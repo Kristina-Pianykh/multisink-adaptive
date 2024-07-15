@@ -8,8 +8,8 @@
         <flink.version>1.19.0</flink.version>
     </properties>
 
-  <groupId>playground</groupId>
-  <artifactId>playground</artifactId>
+  <groupId>multisink-adaptive</groupId>
+  <artifactId>multisink-adaptive</artifactId>
   <packaging>jar</packaging>
   <version>1.0-SNAPSHOT</version>
   <name>app</name>

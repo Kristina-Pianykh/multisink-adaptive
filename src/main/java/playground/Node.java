@@ -23,16 +23,17 @@ public class Node {
 
   public String toString() {
     String str = "";
-    str += "Node ID: " + nodeID + "\n";
-    str += "Events: " + eventsGenerated.toString() + "\n";
-    str += "Forwarding Rules: \n";
+    str += "Node ID: " + nodeID;
+    str += "  Events: " + eventsGenerated.toString() + "\n";
+    str += "  Forwarding Rules: \n";
     for (NodeForwardingRules rule : forwardingRules) {
-      str += rule.toString() + "\n";
+      str += "    " + rule.toString();
     }
-    str += "Processing: \n";
+    str += "  Processing: \n";
     for (String query : projProcessed.keySet()) {
-      str += query + ". Inputs: " + projProcessed.get(query).toString() + "\n";
+      str += "    " + query + ". Inputs: " + projProcessed.get(query).toString() + "\n";
     }
+    str += "  Fallback node: " + this.fallbackNode;
     return str;
   }
 }
