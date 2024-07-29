@@ -623,6 +623,7 @@ public class Playground {
       // to monitor for rates to change
       InequalityInputs inequalityInputs = new InequalityInputs();
       inequalityInputs.multiSinkQuery = multiSinkQuery;
+      inequalityInputs.fallbackNode = fallbackNode.nodeID;
       inequalityInputs.numMultiSinkNodes = nonFallbackNodes.size() + 1;
       inequalityInputs.multiSinkNodes =
           nonFallbackNodes.stream()
@@ -673,7 +674,7 @@ public class Playground {
       objectMapper.writeValue(
           new File(basePath + "updated_forwared_rules.json"), updatedForwardingRulesToFile);
 
-      // inequalityInputs.saveToFile(basePath + "inequality_inputs.json");
+      inequalityInputs.saveToFile(basePath + "inequality_inputs.json");
 
     } catch (IOException e) {
       e.printStackTrace();

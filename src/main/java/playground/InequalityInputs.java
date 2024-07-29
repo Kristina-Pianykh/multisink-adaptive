@@ -6,6 +6,7 @@ import java.util.*;
 public class InequalityInputs {
   public String multiSinkQuery;
   public ArrayList<Integer> multiSinkNodes;
+  public int fallbackNode;
   public int numMultiSinkNodes;
   public String partitioningInput;
   public ArrayList<String> queryInputs;
