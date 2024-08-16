@@ -590,7 +590,7 @@ public class Playground {
         System.out.println("Node: " + node.nodeID);
         Set<LinkedList<Integer>> allPaths =
             Graph.findAllPaths(node.nodeID, fallbackNode.nodeID, nodeNeighbors);
-        LinkedList<Integer> shortestPath = Graph.getShortestPath(allPaths);
+        LinkedList<Integer> shortestPath = Graph.getShortestPath(node.forwardingRules, allPaths);
         System.out.println(
             "Shortest Path from "
                 + node.nodeID

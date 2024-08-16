@@ -77,8 +77,9 @@ public class Graph {
     return paths;
   }
 
-  // assuming there;s only one shortest path!!! otherwise crash
-  public static LinkedList<Integer> getShortestPath(Set<LinkedList<Integer>> paths) {
+  public static LinkedList<Integer> getShortestPath(
+      Set<NodeForwardingRules> forwardingRules, Set<LinkedList<Integer>> paths) {
+    List<LinkedList<Integer>> allShortestPaths = new ArrayList<>(paths);
     LinkedList<Integer> shortestPath = new LinkedList<>();
     Integer minPathLength = Integer.MAX_VALUE;
     // System.out.println("Initial minPathLength: " + minPathLength);
@@ -87,8 +88,15 @@ public class Graph {
       // System.out.println("Size: " + path.size());
       // System.out.println("path.size() <= minPathLength: " + (path.size() <= minPathLength));
       if (path.size() <= minPathLength) {
+        allShortestPaths.add(path);
         shortestPath = path;
         minPathLength = path.size();
+      }
+      for (LinkedList<Integer> p : allShortestPaths) {
+        for (NodeForwardingRules rule : forwardingRules) {
+          Integer neighbor = p.get(1);
+          if (rule.dstNode.equals(neighbor)) return p;
+        }
       }
     }
     return shortestPath;
