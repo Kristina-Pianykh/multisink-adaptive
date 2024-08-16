@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.apache.commons.cli.*;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.json.JSONObject;
 
@@ -355,15 +356,37 @@ public class Playground {
     // return rulesToRemove;
   }
 
+  private static CommandLine parse_cmdline_args(String[] args) {
+    final Options cmdline_opts = new Options();
+    cmdline_opts.addOption(
+        new Option(
+            "path",
+            true,
+            "Path to the directory with topology configs (forwardings rules, evaluation plan,"
+                + " etc.)"));
+    final CommandLineParser parser = new DefaultParser();
+    try {
+      return parser.parse(cmdline_opts, args);
+    } catch (ParseException e) {
+      System.out.println(e.getMessage());
+      System.exit(1);
+    }
+    return null;
+  }
+
   public static void main(String[] args) {
+    CommandLine cmd = parse_cmdline_args(args);
+    String basePath = cmd.getOptionValue("path");
+    assert basePath != null : "Path to the directory with topology configs is not provided";
+
     // String basePath = "/Users/krispian/Uni/bachelorarbeit/generate_flink_inputs/plans/";
-    String basePath =
-        "/Users/krispian/Uni/bachelorarbeit/test_flink_inputs_dev/generate_flink_inputs/plans/";
+    // String basePath = "/Users/krispian/Uni/bachelorarbeit/topologies/SEQ_ABC/plans/";
     String evalPlanPath = basePath + "evaluation_plan.json";
     String forwardingRulesPath = basePath + "forwarding_rules.json";
     String projInputsPath = basePath + "projection_inputs.json";
     String eventAssignmentsPath = basePath + "event_assignment.json";
     String networkEdgesPath = basePath + "network_edges.json";
+    String shortestPathsPath = basePath + "shortest_paths.json";
     String steinerTreeSizePath = basePath + "steiner_tree_size.json";
 
     JsonParser parser = new JsonParser();
@@ -592,7 +615,7 @@ public class Playground {
           node.inputTargetPaths.put(input, newPath);
         }
 
-        // add forwarding rule fo reach node on the path
+        // add forwarding rule for each node on the path
         for (int i = 0; i < shortestPath.size() - 1; i++) {
           Node srcNode = nodes.get(shortestPath.get(i));
           Node destNode = nodes.get(shortestPath.get(i + 1));
@@ -656,6 +679,13 @@ public class Playground {
           new HashMap<>();
       for (Node node : nodes.values()) {
         System.out.println("  Node: " + node.nodeID);
+        System.out.println("  number of rules: " + node.forwardingRules.size());
+
+        if (node.forwardingRules.size() == 0) {
+          updatedForwardingRulesToFile.putIfAbsent(node.nodeID, new ArrayList<>());
+          continue;
+        }
+
         for (NodeForwardingRules rule : node.forwardingRules) {
           HashMap<String, Integer> rules = new HashMap<>();
           rules.put(rule.event, rule.dstNode);
