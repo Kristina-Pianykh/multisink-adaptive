@@ -79,23 +79,22 @@ public class Graph {
 
   public static LinkedList<Integer> getShortestPath(
       Set<NodeForwardingRules> forwardingRules, Set<LinkedList<Integer>> paths) {
-    List<LinkedList<Integer>> allShortestPaths = new ArrayList<>(paths);
+    List<LinkedList<Integer>> allShortestPaths = new ArrayList<>();
     LinkedList<Integer> shortestPath = new LinkedList<>();
-    Integer minPathLength = Integer.MAX_VALUE;
-    // System.out.println("Initial minPathLength: " + minPathLength);
+
+    int minLength = paths.stream().mapToInt(LinkedList::size).min().getAsInt();
     for (LinkedList<Integer> path : paths) {
-      // System.out.println("Path: " + path.toString());
-      // System.out.println("Size: " + path.size());
-      // System.out.println("path.size() <= minPathLength: " + (path.size() <= minPathLength));
-      if (path.size() <= minPathLength) {
+      if (path.size() == minLength) {
         allShortestPaths.add(path);
-        shortestPath = path;
-        minPathLength = path.size();
       }
+    }
+
+    if (allShortestPaths.size() == 1) shortestPath = allShortestPaths.get(0);
+    else {
       for (LinkedList<Integer> p : allShortestPaths) {
         for (NodeForwardingRules rule : forwardingRules) {
           Integer neighbor = p.get(1);
-          if (rule.dstNode.equals(neighbor)) return p;
+          if (rule.dstNode.equals(neighbor)) shortestPath = p;
         }
       }
     }
